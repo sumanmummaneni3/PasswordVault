@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Theme tokens ─────────────────────────────────────────────────────────── */
+
+@layer base {
+  /* Dark (default) — GitHub dark neutral scale */
+  :root,
+  [data-theme="dark"] {
+    --v-900: 13 17 23;
+    --v-800: 22 27 34;
+    --v-700: 33 38 45;
+    --v-600: 48 54 61;
+    --v-500: 72 79 88;
+    --v-400: 139 148 158;
+    --v-300: 177 186 196;
+    --v-200: 201 209 217;
+    --v-100: 230 237 243;
+    --v-50:  240 246 252;
+    --accent:     59 130 246;   /* blue-500 */
+    --accent-fg:  255 255 255;
+    --danger:     220 38 38;    /* red-600 */
+    --danger-fg:  248 113 113;  /* red-400 — legible on dark bg */
+    --success:    22 163 74;    /* green-600 */
+    --success-fg: 134 239 172;  /* green-300 — legible on dark bg */
+    --favorite:   248 113 113;  /* red-400 */
+    --warn:       251 191 36;   /* amber-400 */
+  }
+
+  /* Light */
+  [data-theme="light"] {
+    --v-900: 255 255 255;
+    --v-800: 246 248 250;
+    --v-700: 235 237 240;
+    --v-600: 208 215 222;
+    --v-500: 167 174 185;
+    --v-400: 101 109 118;
+    --v-300: 54 63 72;
+    --v-200: 36 41 47;
+    --v-100: 24 28 33;
+    --v-50:  12 15 18;
+    --accent:     37 99 235;    /* blue-600 — darker for light bg */
+    --accent-fg:  255 255 255;
+    --danger:     185 28 28;    /* red-700 */
+    --danger-fg:  185 28 28;
+    --success:    21 128 61;    /* green-700 */
+    --success-fg: 21 128 61;
+    --favorite:   220 38 38;    /* red-600 */
+    --warn:       161 98 7;     /* amber-700 */
+  }
+
+  /* High contrast — WCAG AAA, avoids red/green reliance */
+  [data-theme="high-contrast"] {
+    --v-900: 0 0 0;
+    --v-800: 12 12 12;
+    --v-700: 28 28 28;
+    --v-600: 55 55 55;
+    --v-500: 100 100 100;
+    --v-400: 160 160 160;
+    --v-300: 210 210 210;
+    --v-200: 235 235 235;
+    --v-100: 248 248 248;
+    --v-50:  255 255 255;
+    --accent:     0 120 215;    /* Windows-style bright blue */
+    --accent-fg:  255 255 255;
+    --danger:     255 102 0;    /* orange — avoids red for protanopia */
+    --danger-fg:  255 140 0;
+    --success:    0 213 197;    /* teal — distinct from orange */
+    --success-fg: 0 213 197;
+    --favorite:   255 215 0;    /* gold */
+    --warn:       255 215 0;
+  }
+
+  /* Colorblind-safe — Okabe-Ito palette on dark neutrals */
+  [data-theme="colorblind"] {
+    --v-900: 13 17 23;
+    --v-800: 22 27 34;
+    --v-700: 33 38 45;
+    --v-600: 48 54 61;
+    --v-500: 72 79 88;
+    --v-400: 139 148 158;
+    --v-300: 177 186 196;
+    --v-200: 201 209 217;
+    --v-100: 230 237 243;
+    --v-50:  240 246 252;
+    --accent:     0 114 178;    /* #0072B2 Okabe-Ito blue */
+    --accent-fg:  255 255 255;
+    --danger:     213 94 0;     /* #D55E00 vermillion */
+    --danger-fg:  230 159 0;    /* #E69F00 orange */
+    --success:    0 158 115;    /* #009E73 bluish green */
+    --success-fg: 102 194 164;  /* lighter green for text */
+    --favorite:   204 121 167;  /* #CC79A7 reddish purple */
+    --warn:       240 228 66;   /* #F0E442 yellow */
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: rgb(var(--v-900));
+    color: rgb(var(--v-200));
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--v-600));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--v-500));
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.3);
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-accent-fg hover:bg-accent/90 active:bg-accent/80;
+  }
+  .btn-secondary {
+    @apply btn bg-vault-700 text-vault-100 hover:bg-vault-600 border border-vault-600;
+  }
+  .btn-danger {
+    @apply btn bg-danger text-accent-fg hover:bg-danger/90;
+  }
+  .btn-ghost {
+    @apply btn text-vault-300 hover:text-vault-100 hover:bg-vault-700;
+  }
+  .input {
+    @apply w-full rounded-md border border-vault-600 bg-vault-800 px-3 py-2 text-sm text-vault-100 placeholder-vault-400 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent;
+  }
+  .label {
+    @apply block text-xs font-medium text-vault-300 mb-1;
+  }
+  .card {
+    @apply rounded-lg border border-vault-700 bg-vault-800 p-4;
+  }
+}

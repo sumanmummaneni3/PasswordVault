@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Allow the app to read/write files the user selects via the open/save dialog -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+
+  <!-- Hardened runtime: disallow JIT and unsigned executable memory -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <false/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <false/>
+
+  <!-- No outbound network access — vault stays offline -->
+  <key>com.apple.security.network.client</key>
+  <false/>
+  <key>com.apple.security.network.server</key>
+  <false/>
+</dict>
+</plist>

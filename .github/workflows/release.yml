@@ -1,0 +1,102 @@
+name: Release
+
+# Triggers on version tags (v1.0.0) or manual dispatch
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write  # needed to create the GitHub Release
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Linux (deb + rpm + AppImage) ──────────────────────────────
+          - platform: ubuntu-22.04
+            rust-targets: ''
+            tauri-args: ''
+
+          # ── macOS universal (Intel + Apple Silicon fat binary) ────────
+          - platform: macos-latest
+            rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+            tauri-args: '--target universal-apple-darwin'
+
+          # ── Windows (NSIS .exe + WiX .msi) ───────────────────────────
+          - platform: windows-latest
+            rust-targets: ''
+            tauri-args: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Linux system dependencies ──────────────────────────────────────
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            pkg-config
+
+      # ── Node.js ───────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── Rust toolchain ─────────────────────────────────────────────────
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # ── Frontend ───────────────────────────────────────────────────────
+      - name: Install npm dependencies
+        run: npm install
+
+      # ── Build & release ────────────────────────────────────────────────
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'PasswordVault ${{ github.ref_name }}'
+          releaseBody: |
+            ## What's included
+
+            | Platform | Files |
+            |----------|-------|
+            | Windows  | `PasswordVault_x64-setup.exe` (NSIS), `PasswordVault_x64_en-US.msi` (WiX) |
+            | macOS    | `PasswordVault_universal.dmg` (Intel + Apple Silicon) |
+            | Linux    | `password-vault_amd64.deb`, `password-vault.x86_64.rpm`, `PasswordVault.AppImage` |
+
+            ### Runtime requirements
+            - **Windows**: WebView2 is installed automatically if not already present (ships with Windows 10/11)
+            - **macOS**: Requires macOS 10.15 Catalina or later (uses built-in WebKit)
+            - **Linux**: Installer declares dependencies on `libwebkit2gtk-4.1` and `libayatana-appindicator3`; the package manager installs them
+
+            ### Installation notes
+            - The vault file (`.pvlt`) is stored wherever you choose — nothing is uploaded to any server
+            - Your master password is never stored; losing it means losing vault access
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.tauri-args }}

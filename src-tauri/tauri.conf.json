@@ -1,0 +1,102 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "PasswordVault",
+  "version": "1.0.0",
+  "identifier": "com.passwordvault.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "PasswordVault",
+        "width": 1200,
+        "height": 760,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true,
+        "decorations": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "PasswordVault",
+    "copyright": "Copyright © 2026 PasswordVault",
+    "category": "Utility",
+    "shortDescription": "Secure offline password manager",
+    "longDescription": "PasswordVault stores your passwords in an AES-256-GCM encrypted vault on your own device. Your data never leaves your machine.",
+    "licenseFile": "../LICENSE",
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "languages": ["English"],
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "entitlements": "entitlements.plist",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "dmg": {
+        "windowX": 200,
+        "windowY": 120,
+        "windowWidth": 660,
+        "windowHeight": 400,
+        "appPosition": { "x": 170, "y": 220 },
+        "applicationFolderPosition": { "x": 490, "y": 220 }
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libayatana-appindicator3-1",
+          "libssl3"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "libayatana-appindicator-gtk3",
+          "openssl"
+        ],
+        "release": "1"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  }
+}
