@@ -7,7 +7,8 @@ export function EntryList() {
   const { selectedId, selectEntry, searchQuery } = store;
   const entries = filteredEntries(store);
 
-  function getFaviconUrl(url?: string): string | null {
+  function getFaviconUrl(urls: string[]): string | null {
+    const url = urls[0];
     if (!url) return null;
     try {
       const u = new URL(url.startsWith("http") ? url : `https://${url}`);
@@ -34,7 +35,7 @@ export function EntryList() {
               key={entry.id}
               entry={entry}
               selected={entry.id === selectedId}
-              favicon={getFaviconUrl(entry.url)}
+              favicon={getFaviconUrl(entry.urls)}
               onClick={() => selectEntry(entry.id)}
             />
           ))}
@@ -88,7 +89,7 @@ function EntryRow({
             )}
           </div>
           <p className="truncate text-xs text-vault-400 mt-0.5">
-            {entry.username || entry.url || "—"}
+            {entry.username || entry.urls[0] || "—"}
           </p>
         </div>
       </button>

@@ -70,10 +70,6 @@
       "signingIdentity": null,
       "providerShortName": null,
       "dmg": {
-        "windowX": 200,
-        "windowY": 120,
-        "windowWidth": 660,
-        "windowHeight": 400,
         "appPosition": { "x": 170, "y": 220 },
         "applicationFolderPosition": { "x": 490, "y": 220 }
       }

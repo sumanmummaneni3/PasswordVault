@@ -32,12 +32,22 @@ impl From<VaultError> for String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordHistoryEntry {
+    pub password: String,
+    pub changed_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultEntry {
     pub id: String,
     pub title: String,
     pub username: String,
     pub password: String,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
+    /// List of URLs / IPs where this credential is used.
+    #[serde(default)]
+    pub urls: Vec<String>,
+    /// Legacy single-URL field — deserialized only for migration, never written.
+    #[serde(skip_serializing, default)]
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub notes: Option<String>,
@@ -45,6 +55,8 @@ pub struct VaultEntry {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub category: Option<String>,
     pub favorite: bool,
+    #[serde(default)]
+    pub password_history: Vec<PasswordHistoryEntry>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -54,7 +66,7 @@ impl VaultEntry {
         title: String,
         username: String,
         password: String,
-        url: Option<String>,
+        urls: Vec<String>,
         notes: Option<String>,
         tags: Vec<String>,
         category: Option<String>,
@@ -65,11 +77,13 @@ impl VaultEntry {
             title,
             username,
             password,
-            url,
+            urls,
+            url: None,
             notes,
             tags,
             category,
             favorite: false,
+            password_history: Vec::new(),
             created_at: now.clone(),
             updated_at: now,
         }
@@ -121,6 +135,19 @@ impl AppState {
     }
 }
 
+/// Migrates entries from the old single-`url` format to `urls: Vec<String>`.
+fn migrate_entries(entries: &mut Vec<VaultEntry>) {
+    for entry in entries.iter_mut() {
+        if entry.urls.is_empty() {
+            if let Some(ref old_url) = entry.url {
+                if !old_url.is_empty() {
+                    entry.urls.push(old_url.clone());
+                }
+            }
+        }
+    }
+}
+
 /// Creates a new vault file at `path` encrypted with `master_password`.
 pub fn create_vault(
     path: &Path,
@@ -161,7 +188,9 @@ pub fn open_vault(
     let salt = crypto::extract_salt(&vault_bytes)?;
     let key = crypto::derive_key(master_password, &salt)?;
     let json = crypto::decrypt_vault(&key, &vault_bytes)?;
-    let data: VaultData = serde_json::from_slice(&json)?;
+    let mut data: VaultData = serde_json::from_slice(&json)?;
+
+    migrate_entries(&mut data.entries);
 
     let entries = data.entries.clone();
 
@@ -217,7 +246,7 @@ pub fn add_entry(state: &AppState, entry: VaultEntry) -> Result<VaultEntry, Vaul
     Ok(entry)
 }
 
-pub fn update_entry(state: &AppState, updated: VaultEntry) -> Result<VaultEntry, VaultError> {
+pub fn update_entry(state: &AppState, mut updated: VaultEntry) -> Result<VaultEntry, VaultError> {
     {
         let mut guard = state.data.lock().unwrap();
         let data = guard.as_mut().ok_or(VaultError::Locked)?;
@@ -226,8 +255,21 @@ pub fn update_entry(state: &AppState, updated: VaultEntry) -> Result<VaultEntry,
             .iter_mut()
             .find(|e| e.id == updated.id)
             .ok_or_else(|| VaultError::EntryNotFound(updated.id.clone()))?;
+
+        // Password changed — push the old one onto the history stack.
+        if entry.password != updated.password && !entry.password.is_empty() {
+            let mut history = entry.password_history.clone();
+            history.push(PasswordHistoryEntry {
+                password: entry.password.clone(),
+                changed_at: Utc::now().to_rfc3339(),
+            });
+            updated.password_history = history;
+        } else {
+            updated.password_history = entry.password_history.clone();
+        }
+
+        updated.updated_at = Utc::now().to_rfc3339();
         *entry = updated.clone();
-        entry.updated_at = Utc::now().to_rfc3339();
     }
     save_vault(state)?;
     Ok(updated)
@@ -274,10 +316,7 @@ pub fn search_entries(state: &AppState, query: &str) -> Result<Vec<VaultEntry>, 
         .filter(|e| {
             e.title.to_lowercase().contains(&q)
                 || e.username.to_lowercase().contains(&q)
-                || e.url
-                    .as_deref()
-                    .map(|u| u.to_lowercase().contains(&q))
-                    .unwrap_or(false)
+                || e.urls.iter().any(|u| u.to_lowercase().contains(&q))
                 || e.tags.iter().any(|t| t.to_lowercase().contains(&q))
         })
         .cloned()
@@ -291,7 +330,6 @@ pub fn change_master_password(
     old_password: &str,
     new_password: &str,
 ) -> Result<(), VaultError> {
-    // Verify old password by trying to re-derive and compare
     let salt_guard = state.salt.lock().unwrap();
     let salt = salt_guard.as_ref().ok_or(VaultError::Locked)?;
 

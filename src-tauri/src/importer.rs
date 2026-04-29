@@ -88,11 +88,16 @@ fn make_entry(
         title: title.to_string(),
         username: username.to_string(),
         password: password.to_string(),
-        url: url.filter(|s| !s.is_empty()).map(|s| s.to_string()),
+        urls: url
+            .filter(|s| !s.is_empty())
+            .map(|s| vec![s.to_string()])
+            .unwrap_or_default(),
+        url: None,
         notes: notes.filter(|s| !s.is_empty()).map(|s| s.to_string()),
         tags: Vec::new(),
         category: category.filter(|s| !s.is_empty()).map(|s| s.to_string()),
         favorite: false,
+        password_history: Vec::new(),
         created_at: now.clone(),
         updated_at: now,
     }
@@ -325,7 +330,7 @@ pub fn export_to_csv(entries: &[VaultEntry], path: &str) -> Result<(), ImportErr
             &e.title,
             &e.username,
             &e.password,
-            e.url.as_deref().unwrap_or(""),
+            e.urls.first().map(|s| s.as_str()).unwrap_or(""),
             e.notes.as_deref().unwrap_or(""),
             &e.tags.join(", "),
             e.category.as_deref().unwrap_or(""),

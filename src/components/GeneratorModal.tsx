@@ -192,7 +192,7 @@ export function GeneratorModal({ onClose, onUse }: Props) {
 
               {pwOpts.symbols && (
                 <div>
-                  <label className="label">Custom symbols (leave blank for default)</label>
+                  <label className="label">Custom symbols (leave blank for default: - @)</label>
                   <input
                     type="text"
                     value={pwOpts.custom_symbols ?? ""}
@@ -202,7 +202,7 @@ export function GeneratorModal({ onClose, onUse }: Props) {
                         custom_symbols: e.target.value || undefined,
                       }))
                     }
-                    placeholder="e.g. !@#$%"
+                    placeholder="e.g. -@!#$  (replaces defaults)"
                     className="input font-mono text-sm"
                   />
                 </div>
@@ -313,16 +313,35 @@ function Toggle({
 }
 
 function calcPasswordEntropy(opts: PasswordOptions): number {
-  let charsetSize = 0;
-  const ambiguousCount = 5;
-  if (opts.uppercase) charsetSize += opts.exclude_ambiguous ? 26 - 3 : 26;
-  if (opts.lowercase) charsetSize += opts.exclude_ambiguous ? 26 - 2 : 26;
-  if (opts.numbers) charsetSize += opts.exclude_ambiguous ? 10 - ambiguousCount + 3 : 10;
+  // Mirrors the Rust weighted algorithm:
+  //   uppercase weight 3, lowercase weight 3, digits weight 2, symbols weight 1
+  // Entropy = H_class_selection + H_within_class (both weighted by class probability)
+  const pools: { size: number; weight: number }[] = [];
+  if (opts.uppercase) pools.push({ size: opts.exclude_ambiguous ? 23 : 26, weight: 3 });
+  if (opts.lowercase) pools.push({ size: opts.exclude_ambiguous ? 24 : 26, weight: 3 });
+  if (opts.numbers)   pools.push({ size: opts.exclude_ambiguous ? 8 : 10,  weight: 2 });
   if (opts.symbols) {
-    charsetSize += opts.custom_symbols?.length ?? 27;
+    const symSize = opts.custom_symbols
+      ? Math.max(1, new Set(opts.custom_symbols).size)
+      : 2; // default: - and @
+    pools.push({ size: symSize, weight: 1 });
   }
-  if (charsetSize === 0) return 0;
-  return Math.round(opts.length * Math.log2(charsetSize));
+  if (pools.length === 0) return 0;
+
+  const totalWeight = pools.reduce((s, p) => s + p.weight, 0);
+
+  // Shannon entropy: H = -Σ p·log₂(p) for class selection
+  //                    + Σ p·log₂(poolSize) for within-class selection
+  const hClass = -pools.reduce((s, p) => {
+    const prob = p.weight / totalWeight;
+    return s + prob * Math.log2(prob);
+  }, 0);
+  const hWithin = pools.reduce((s, p) => {
+    const prob = p.weight / totalWeight;
+    return s + prob * Math.log2(p.size);
+  }, 0);
+
+  return Math.round(opts.length * (hClass + hWithin));
 }
 
 function calcPassphraseEntropy(wordCount: number): number {

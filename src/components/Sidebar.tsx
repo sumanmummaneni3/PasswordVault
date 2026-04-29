@@ -50,11 +50,12 @@ export function Sidebar({ onOpenGenerator, onOpenImport, onOpenSettings }: Props
       title: "",
       username: "",
       password: "",
-      url: undefined,
+      urls: [],
       notes: undefined,
       tags: [],
       category: undefined,
       favorite: false,
+      password_history: [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

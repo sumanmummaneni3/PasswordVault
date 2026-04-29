@@ -1,12 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   Check,
+  ChevronDown,
   Copy,
   Edit2,
   ExternalLink,
   Eye,
   EyeOff,
   Heart,
+  History,
   Plus,
   Save,
   Tag,
@@ -16,6 +18,7 @@ import {
 import { useEffect, useState } from "react";
 import { useVaultStore } from "../store/vaultStore";
 import type { VaultEntry } from "../types";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { GeneratorModal } from "./GeneratorModal";
 
 export function EntryDetail() {
@@ -33,8 +36,11 @@ export function EntryDetail() {
   const [editing, setEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showGenerator, setShowGenerator] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [draft, setDraft] = useState<VaultEntry | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [revealHistoryIndex, setRevealHistoryIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!selectedId) {
@@ -47,17 +53,20 @@ export function EntryDetail() {
         title: "",
         username: "",
         password: "",
-        url: undefined,
+        urls: [],
         notes: undefined,
         tags: [],
         category: undefined,
         favorite: false,
+        password_history: [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
     } else if (entry) {
       setDraft({ ...entry });
       setEditing(false);
+      setShowHistory(false);
+      setRevealHistoryIndex(null);
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -91,13 +100,15 @@ export function EntryDetail() {
   }
 
   async function handleDelete() {
-    if (!entry || !confirm(`Delete "${entry.title}"?`)) return;
+    if (!entry) return;
     try {
       await invoke("cmd_delete_entry", { id: entry.id });
       removeEntry(entry.id);
       selectEntry(null);
     } catch (err) {
       alert(`Failed to delete: ${err}`);
+    } finally {
+      setShowDeleteConfirm(false);
     }
   }
 
@@ -128,7 +139,7 @@ export function EntryDetail() {
       setCopied(key);
       setTimeout(() => setCopied(null), 2000);
     } catch {
-      // ignore — clipboard access might be restricted
+      // clipboard access might be restricted
     }
   }
 
@@ -201,8 +212,9 @@ export function EntryDetail() {
                 Edit
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => setShowDeleteConfirm(true)}
                 className="btn-ghost text-xs py-1 px-2 hover:text-danger-fg"
+                title="Delete entry"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -269,35 +281,83 @@ export function EntryDetail() {
           </div>
         </div>
 
-        {/* URL */}
+        {/* URLs / IPs */}
         <div>
-          <label className="label">URL</label>
+          <label className="label">URLs / IPs</label>
           {editing ? (
-            <input
-              type="url"
-              value={d.url ?? ""}
-              onChange={(e) =>
-                setDraft((prev) =>
-                  prev && { ...prev, url: e.target.value || undefined }
-                )
-              }
-              placeholder="https://example.com"
-              className="input"
-            />
+            <div className="space-y-2">
+              {d.urls.map((url, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={url}
+                    onChange={(e) =>
+                      setDraft((prev) =>
+                        prev && {
+                          ...prev,
+                          urls: prev.urls.map((u, j) =>
+                            j === i ? e.target.value : u
+                          ),
+                        }
+                      )
+                    }
+                    placeholder="https://example.com or 192.168.1.1"
+                    className="input flex-1 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((prev) =>
+                        prev && {
+                          ...prev,
+                          urls: prev.urls.filter((_, j) => j !== i),
+                        }
+                      )
+                    }
+                    className="btn-ghost p-2 text-vault-400 hover:text-danger-fg"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft((prev) =>
+                    prev && { ...prev, urls: [...prev.urls, ""] }
+                  )
+                }
+                className="btn-ghost text-xs py-1.5 justify-start"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add URL or IP
+              </button>
+            </div>
           ) : (
-            <div className="input flex items-center">
-              {d.url ? (
-                <a
-                  href={d.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:text-accent/80 flex items-center gap-1 truncate text-sm"
-                >
-                  {d.url}
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                </a>
+            <div className="space-y-1">
+              {d.urls.length > 0 ? (
+                d.urls.map((url, i) => (
+                  <div
+                    key={i}
+                    className="input flex items-center justify-between gap-2"
+                  >
+                    <a
+                      href={url.startsWith("http") ? url : `https://${url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-accent hover:text-accent/80 flex items-center gap-1 truncate text-sm"
+                    >
+                      {url}
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </a>
+                    <CopyButton
+                      copied={copied === `url-${i}`}
+                      onClick={() => copyToClipboard(url, `url-${i}`)}
+                    />
+                  </div>
+                ))
               ) : (
-                <span className="text-vault-500 text-sm">—</span>
+                <div className="input text-sm text-vault-500">—</div>
               )}
             </div>
           )}
@@ -387,6 +447,66 @@ export function EntryDetail() {
           )}
         </div>
 
+        {/* Password History */}
+        {!editing && entry && entry.password_history.length > 0 && (
+          <div className="pt-2 border-t border-vault-800">
+            <button
+              onClick={() => {
+                setShowHistory((v) => !v);
+                setRevealHistoryIndex(null);
+              }}
+              className="flex items-center gap-2 text-xs font-medium text-vault-400 hover:text-vault-200 transition-colors"
+            >
+              <History className="h-3.5 w-3.5" />
+              Password History ({entry.password_history.length})
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform ${
+                  showHistory ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {showHistory && (
+              <div className="mt-2 space-y-1.5">
+                {[...entry.password_history].reverse().map((h, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-md bg-vault-800 border border-vault-700 px-3 py-2"
+                  >
+                    <span className="text-[10px] text-vault-500 shrink-0 tabular-nums">
+                      {new Date(h.changed_at).toLocaleString()}
+                    </span>
+                    <span className="flex-1 font-mono text-xs text-vault-300 truncate">
+                      {revealHistoryIndex === i
+                        ? h.password
+                        : "•".repeat(Math.min(h.password.length, 16))}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setRevealHistoryIndex(
+                          revealHistoryIndex === i ? null : i
+                        )
+                      }
+                      className="btn-ghost p-1 shrink-0"
+                      title={revealHistoryIndex === i ? "Hide" : "Reveal"}
+                    >
+                      {revealHistoryIndex === i ? (
+                        <EyeOff className="h-3 w-3" />
+                      ) : (
+                        <Eye className="h-3 w-3" />
+                      )}
+                    </button>
+                    <CopyButton
+                      copied={copied === `hist-${i}`}
+                      onClick={() => copyToClipboard(h.password, `hist-${i}`)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Timestamps */}
         {!editing && entry && (
           <div className="pt-2 border-t border-vault-800 text-xs text-vault-500 space-y-1">
@@ -403,6 +523,17 @@ export function EntryDetail() {
             setDraft((prev) => prev && { ...prev, password: pw });
             setShowGenerator(false);
           }}
+        />
+      )}
+
+      {showDeleteConfirm && entry && (
+        <ConfirmDialog
+          title="Delete entry"
+          description={`"${entry.title}" will be permanently removed from your vault. This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
         />
       )}
     </div>

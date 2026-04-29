@@ -1,13 +1,19 @@
+export interface PasswordHistoryEntry {
+  password: string;
+  changed_at: string;
+}
+
 export interface VaultEntry {
   id: string;
   title: string;
   username: string;
   password: string;
-  url?: string;
+  urls: string[];
   notes?: string;
   tags: string[];
   category?: string;
   favorite: boolean;
+  password_history: PasswordHistoryEntry[];
   created_at: string;
   updated_at: string;
 }

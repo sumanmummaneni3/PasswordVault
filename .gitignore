@@ -22,3 +22,6 @@ src-tauri/gen/
 
 # Claude Code session memory
 .claude/
+
+# Architecture doc — maintained separately, not versioned in git
+ARCHITECTURE.md

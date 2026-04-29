@@ -63,65 +63,140 @@ impl Default for PassphraseOptions {
     }
 }
 
+/// Weighted password generation algorithm:
+///
+/// Character classes are sampled in two stages:
+///   1. Pick a class with probability proportional to its weight
+///      (uppercase=3, lowercase=3, digits=2, symbols=1)
+///   2. Pick uniformly within that class
+///
+/// This keeps letters dominant while digits appear regularly and symbols
+/// appear sparingly — making the result readable without sacrificing strength.
+///
+/// Default symbols are `-` and `@` (common, rarely break web forms).
+/// If the user supplies custom symbols they fully replace the default set.
+///
+/// Before returning, one character from each enabled class is guaranteed to
+/// appear (inserted then shuffled), so site requirements are always met.
 pub fn generate_password(opts: &PasswordOptions) -> Result<String, GeneratorError> {
     if opts.length < 4 {
         return Err(GeneratorError::InvalidLength);
     }
 
-    let mut charset = String::new();
-    let ambiguous = "0Ol1I";
+    const AMBIGUOUS: &str = "0Ol1I";
+
+    let filter = |src: &str| -> Vec<char> {
+        if opts.exclude_ambiguous {
+            src.chars().filter(|c| !AMBIGUOUS.contains(*c)).collect()
+        } else {
+            src.chars().collect()
+        }
+    };
+
+    // Build (pool, weight) pairs for each enabled class
+    let mut pools: Vec<(Vec<char>, u32)> = Vec::new();
 
     if opts.uppercase {
-        let upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        if opts.exclude_ambiguous {
-            charset.extend(upper.chars().filter(|c| !ambiguous.contains(*c)));
-        } else {
-            charset.push_str(upper);
+        let p = filter("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        if !p.is_empty() {
+            pools.push((p, 3));
         }
     }
     if opts.lowercase {
-        let lower = "abcdefghijklmnopqrstuvwxyz";
-        if opts.exclude_ambiguous {
-            charset.extend(lower.chars().filter(|c| !ambiguous.contains(*c)));
-        } else {
-            charset.push_str(lower);
+        let p = filter("abcdefghijklmnopqrstuvwxyz");
+        if !p.is_empty() {
+            pools.push((p, 3));
         }
     }
     if opts.numbers {
-        let digits = "0123456789";
-        if opts.exclude_ambiguous {
-            charset.extend(digits.chars().filter(|c| !ambiguous.contains(*c)));
-        } else {
-            charset.push_str(digits);
+        let p = filter("0123456789");
+        if !p.is_empty() {
+            pools.push((p, 2));
         }
     }
     if opts.symbols {
-        let syms = opts
-            .custom_symbols
-            .as_deref()
-            .unwrap_or("!@#$%^&*()_+-=[]{}|;:,.<>?");
-        charset.push_str(syms);
-    }
-
-    if charset.is_empty() {
-        return Err(GeneratorError::EmptyCharset);
-    }
-
-    let chars: Vec<char> = charset.chars().collect();
-    let mut password = String::with_capacity(opts.length as usize);
-
-    // Rejection sampling to avoid modulo bias
-    let max_valid = (u64::MAX / chars.len() as u64) * chars.len() as u64;
-    let mut i = 0usize;
-    while i < opts.length as usize {
-        let rand = OsRng.next_u64();
-        if rand < max_valid {
-            password.push(chars[(rand as usize) % chars.len()]);
-            i += 1;
+        // Custom symbols take full priority; otherwise use the safe defaults -@
+        let raw = opts.custom_symbols.as_deref().unwrap_or("-@");
+        // Deduplicate while preserving order
+        let mut seen = std::collections::HashSet::new();
+        let p: Vec<char> = raw.chars().filter(|c| seen.insert(*c)).collect();
+        if !p.is_empty() {
+            pools.push((p, 1));
         }
     }
 
-    Ok(password)
+    if pools.is_empty() {
+        return Err(GeneratorError::EmptyCharset);
+    }
+
+    let length = opts.length as usize;
+    let mut result: Vec<char> = Vec::with_capacity(length);
+
+    // Guarantee at least one character from each enabled class
+    for (pool, _) in &pools {
+        if result.len() < length {
+            result.push(pick_from(pool));
+        }
+    }
+
+    // Fill remaining positions: pick a class by weight, then pick within it
+    let total_weight: u32 = pools.iter().map(|(_, w)| *w).sum();
+    while result.len() < length {
+        let idx = weighted_pick(&pools, total_weight);
+        result.push(pick_from(&pools[idx].0));
+    }
+
+    // Fisher-Yates shuffle — ensures guaranteed chars aren't always at the front
+    fisher_yates(&mut result);
+
+    Ok(result.into_iter().collect())
+}
+
+/// Picks a random element from `pool` using rejection sampling (no modulo bias).
+fn pick_from(pool: &[char]) -> char {
+    let n = pool.len() as u64;
+    let max_valid = (u64::MAX / n) * n;
+    loop {
+        let r = OsRng.next_u64();
+        if r < max_valid {
+            return pool[(r % n) as usize];
+        }
+    }
+}
+
+/// Selects a pool index proportional to its weight, with no modulo bias.
+fn weighted_pick(pools: &[(Vec<char>, u32)], total_weight: u32) -> usize {
+    let tw = total_weight as u64;
+    let max_valid = (u64::MAX / tw) * tw;
+    loop {
+        let r = OsRng.next_u64();
+        if r < max_valid {
+            let pick = (r % tw) as u32;
+            let mut cumulative = 0u32;
+            for (i, (_, w)) in pools.iter().enumerate() {
+                cumulative += w;
+                if pick < cumulative {
+                    return i;
+                }
+            }
+        }
+    }
+}
+
+/// In-place Fisher-Yates shuffle using cryptographic randomness.
+fn fisher_yates(buf: &mut Vec<char>) {
+    let n = buf.len();
+    for i in (1..n).rev() {
+        let range = (i + 1) as u64;
+        let max_valid = (u64::MAX / range) * range;
+        loop {
+            let r = OsRng.next_u64();
+            if r < max_valid {
+                buf.swap(i, (r % range) as usize);
+                break;
+            }
+        }
+    }
 }
 
 pub fn generate_passphrase(opts: &PassphraseOptions) -> Result<String, GeneratorError> {

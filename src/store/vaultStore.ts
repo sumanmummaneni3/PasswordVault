@@ -76,7 +76,7 @@ export function filteredEntries(store: VaultStore): VaultEntry[] {
       (e) =>
         e.title.toLowerCase().includes(q) ||
         e.username.toLowerCase().includes(q) ||
-        e.url?.toLowerCase().includes(q) ||
+        e.urls.some((u) => u.toLowerCase().includes(q)) ||
         e.tags.some((t) => t.toLowerCase().includes(q))
     );
   }
